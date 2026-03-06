@@ -88,3 +88,5 @@ Default URL: `http://127.0.0.1:7860`
 - Persist `vector_db/chroma_db` in production to avoid cold-start reindexing.
 - Set `APP_HOST=0.0.0.0` when deploying in containers.
 - See `Technical_Doc.md` for architecture and deployment details.
+
+
