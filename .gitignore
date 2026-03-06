@@ -1,0 +1,24 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# Local vector store data
+vector_db/chroma_db/
+
+# Notebook artifacts
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
