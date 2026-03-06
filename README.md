@@ -1,31 +1,31 @@
-# AI Book Recommender
+# SemanticShelf
 
-Production-ready semantic recommendation web application built with Sentence Transformers, ChromaDB, and Gradio.
+AI semantic book recommendation engine built with Sentence Transformers, ChromaDB, and Gradio.
 
 ## Features
 
-- Semantic retrieval from natural-language user intent
-- Persistent local vector index with deterministic rebuild behavior
+- Semantic retrieval from natural-language intent
+- Deterministic indexing with persistent local vector storage
 - Environment-driven configuration with startup validation
-- Clean, responsive, professional UI
-- Modular architecture (`src/`) for maintainability and deployment
+- Professional, full-viewport UI with responsive result cards
+- Modular `src/` architecture for maintenance and deployment
 
 ## Project Structure
 
 ```text
 BookRecommender/
 +-- data/
-¦   +-- books.csv
+|   +-- books.csv
 +-- src/
-¦   +-- __init__.py
-¦   +-- config.py
-¦   +-- data_loader.py
-¦   +-- embeddings.py
-¦   +-- logging_utils.py
-¦   +-- recommender.py
-¦   +-- vector_store.py
+|   +-- __init__.py
+|   +-- config.py
+|   +-- data_loader.py
+|   +-- embeddings.py
+|   +-- logging_utils.py
+|   +-- recommender.py
+|   +-- vector_store.py
 +-- vector_db/
-¦   +-- chroma_db/             # generated at runtime
+|   +-- chroma_db/             # generated at runtime
 +-- .env.example
 +-- .gitignore
 +-- app.py
@@ -34,7 +34,7 @@ BookRecommender/
 +-- Technical_Doc.md
 ```
 
-## Setup
+## Local Setup
 
 1. Create and activate a virtual environment.
 2. Install dependencies:
@@ -49,13 +49,25 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-4. Run app:
+4. Run the app:
 
 ```bash
 python app.py
 ```
 
 Default URL: `http://127.0.0.1:7860`
+
+## Hugging Face Spaces (Gradio)
+
+1. Create a Space and choose Gradio as the SDK.
+2. Upload these items:
+	- `app.py`
+	- `requirements.txt`
+	- `README.md`
+	- `data/books.csv`
+	- `src/`
+3. Add secrets for the environment variables you use (see below).
+4. First startup will download the model and rebuild the vector index.
 
 ## Environment Variables
 
@@ -72,7 +84,7 @@ Default URL: `http://127.0.0.1:7860`
 
 ## Production Notes
 
-- On first run, the embedding model may be downloaded and indexed.
+- First run may download the embedding model and build the vector index.
 - Persist `vector_db/chroma_db` in production to avoid cold-start reindexing.
 - Set `APP_HOST=0.0.0.0` when deploying in containers.
 - See `Technical_Doc.md` for architecture and deployment details.

@@ -1,4 +1,4 @@
-# Technical Documentation - AI Book Recommender
+# Technical Documentation - SemanticShelf
 
 ## 1. System Architecture
 
@@ -10,7 +10,7 @@ The application follows a layered modular architecture:
 
 2. Application/Service Layer (`src/recommender.py`)
 - Owns lifecycle of model loading, vector index initialization, and query execution.
-- Provides `BookRecommender` service abstraction and `Recommendation` DTO.
+- Provides a `BookRecommender` service abstraction and `Recommendation` DTO.
 
 3. Data + Infrastructure Layer
 - Dataset source: `data/books.csv`
@@ -76,7 +76,7 @@ Production validation rules include:
 - `TOP_K_MAX > 0`
 - `DEFAULT_RESULTS <= TOP_K_MAX`
 - `APP_PORT` in `[1, 65535]`
-- non-empty `CHROMA_COLLECTION` and `EMBEDDING_MODEL`
+- Non-empty `CHROMA_COLLECTION` and `EMBEDDING_MODEL`
 
 ### `src/data_loader.py`
 
@@ -122,13 +122,13 @@ Operational behavior:
 Responsibilities:
 - Compose and serve Gradio UI.
 - Render result cards with escaped content for safety.
-- Provide examples, search/submit/clear interactions.
+- Provide search/submit/clear interactions with loading and empty states.
 - Initialize recommender at startup for predictable first request behavior.
 
 UI characteristics:
-- Responsive layout for desktop/mobile.
-- Consistent typography and spacing.
-- Structured visual hierarchy (hero, controls, result cards, feedback states).
+- Full-viewport hero layout with centered search.
+- Consistent typography, spacing, and responsive card grid.
+- Clear feedback states for loading, empty, and error cases.
 
 ## 5. Data Flow
 
@@ -141,8 +141,8 @@ UI characteristics:
 5. Embedding model is loaded/cached.
 6. Chroma collection is opened.
 7. Reindex decision:
-- force reindex requested, or
-- collection count differs from current dataset size.
+- Force reindex requested, or
+- Collection count differs from current dataset size.
 8. If reindex needed, all book texts are embedded in batches and inserted with metadata.
 
 ### B. Query Lifecycle
@@ -182,6 +182,13 @@ pip install -r requirements.txt
 python app.py
 ```
 
+### Hugging Face Spaces (Gradio)
+
+1. Create a Space and choose Gradio as the SDK.
+2. Upload `app.py`, `requirements.txt`, `README.md`, `data/books.csv`, and `src/`.
+3. Add secrets for any required environment variables.
+4. First startup will download the model and rebuild the vector index.
+
 ### Container/Server Deployment
 
 Recommended runtime settings:
@@ -191,10 +198,10 @@ Recommended runtime settings:
 
 Persistence recommendations:
 - Mount/persist `vector_db/chroma_db` to avoid re-embedding every restart.
-- Persist `data/` if dataset may be updated externally.
+- Persist `data/` if the dataset may be updated externally.
 
 Cold-start considerations:
-- First startup may download model and build index, which is expected.
+- First startup may download the model and build the index.
 - Subsequent startups are faster when model cache and vector DB are persisted.
 
 ## 8. Environment Configuration
@@ -250,7 +257,7 @@ python -c "from src.recommender import recommender_service; recommender_service.
 ## 10. Design Decisions
 
 1. Persistent vector storage (Chroma)
-- Chosen to minimize repeat startup cost and preserve index between restarts.
+- Minimizes repeat startup cost and preserves index between restarts.
 
 2. Semantic retrieval over keyword matching
 - Better captures user intent and conceptual similarity.
@@ -273,17 +280,7 @@ python -c "from src.recommender import recommender_service; recommender_service.
 8. Telemetry-disabled vector client
 - Better default for privacy-sensitive/local deployments.
 
-## 11. Cleanup and Production Quality Actions Applied
-
-- Removed legacy and non-production artifacts from root workspace:
-  - IDE directory (`.idea`)
-  - Python caches (`__pycache__`, `src/__pycache__`)
-  - Legacy archive directory (`archive/`)
-- Removed generated local vector index so deployments start from clean state and rebuild deterministically.
-- Updated dependencies to bounded production version ranges.
-- Updated env template and docs to match current runtime behavior.
-
-## 12. Known Operational Notes
+## 11. Known Operational Notes
 
 - First model load may print upstream library informational output and can be slower due to model download.
 - To optimize cold starts in production:
