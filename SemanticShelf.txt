@@ -1,0 +1,204 @@
+SemanticShelf 
+
+Overview
+SemanticShelf is a semantic book recommendation application. It takes a natural-language query (topic, theme, genre, idea) and returns a ranked list of books whose descriptions and metadata are semantically similar to the query. The system uses sentence-level embeddings, stores them in a local persistent vector database, and serves a web UI with Streamlit.
+
+Key Goals
+- Provide meaning-based search (semantic retrieval), not just keyword matching.
+- Keep indexing deterministic and persistent across restarts.
+- Use environment-driven configuration with validation.
+- Offer a professional, responsive, full-viewport UI.
+
+Project Structure
+- app.py
+  - UI entrypoint. Builds and serves the Streamlit app.
+  - Handles query input, result rendering, and error messages.
+- README.md
+  - Quick start, project overview, deployment notes.
+- SemanticShelf.txt
+  - Detailed architecture and operational notes.
+- requirements.txt
+  - Python dependencies pinned or constrained.
+- pyproject.toml
+  - Packaging metadata.
+- .env.example
+  - Template of runtime configuration variables.
+- data/
+  - books.csv: dataset of book metadata used for indexing.
+- src/
+  - __init__.py: package marker.
+  - config.py: typed settings and environment validation.
+  - data_loader.py: CSV load, validation, normalization.
+  - embeddings.py: embedding model loader (cached).
+  - logging_utils.py: central logging setup.
+  - recommender.py: core recommendation service.
+  - vector_store.py: ChromaDB client and collection lifecycle.
+
+Runtime Artifacts (Generated)
+- vector_db/chroma_db/
+  - Local persistent ChromaDB data directory.
+  - chroma.sqlite3 and collection folder (auto-generated at runtime).
+
+Dataset Details (data/books.csv)
+- Format: CSV.
+- Required columns:
+  - title
+  - authors
+  - categories
+  - description
+  - isbn13
+- Optional column:
+  - subtitle
+- Additional columns may exist (isbn10, thumbnail, published_year, ratings, etc.), but only the required/optional columns are used in indexing.
+- Preprocessing:
+  - Missing columns are created (optional fields become empty strings).
+  - Nulls are replaced with empty strings.
+  - Whitespace is stripped.
+  - A combined text field is built as:
+    title + authors + categories + description
+  - Rows with empty title are removed.
+
+Libraries and Dependencies
+- streamlit
+  - Web UI framework used to build the interactive interface.
+- pandas
+  - CSV ingestion and preprocessing.
+- sentence-transformers
+  - Embedding model for semantic search.
+- chromadb
+  - Vector database with persistent storage.
+- python-dotenv
+  - Loads environment variables from .env.
+
+Environment Configuration (.env.example)
+- BOOKS_DATA_PATH: CSV file path.
+- CHROMA_PATH: folder for vector DB persistence (created at runtime).
+- CHROMA_COLLECTION: collection name.
+- EMBEDDING_MODEL: sentence-transformers model id.
+- EMBEDDING_CACHE_DIR: optional cache directory for model files.
+- BATCH_SIZE: number of rows per embedding batch.
+- DEFAULT_RESULTS: default number of results returned.
+- TOP_K_MAX: max results user can request.
+- LOG_LEVEL: logging verbosity.
+
+Core Components and Responsibilities
+
+1) Configuration (src/config.py)
+- Loads environment variables once at startup.
+- Converts boolean and integer values safely.
+- Validates critical constraints:
+  - batch size > 0
+  - default results > 0
+  - max results > 0
+  - default results <= max results
+  - collection name not empty
+  - embedding model id not empty
+
+2) Data Loading (src/data_loader.py)
+- Ensures the CSV exists.
+- Checks for required columns.
+- Normalizes columns to strings and trims whitespace.
+- Builds the combined semantic text field.
+- Filters out invalid rows.
+
+3) Embedding Model (src/embeddings.py)
+- Loads SentenceTransformer once using LRU cache.
+- Optional cache folder is supported.
+- Sets TOKENIZERS_PARALLELISM=false to reduce noisy logging or oversubscription.
+
+4) Vector Store (src/vector_store.py)
+- Creates a persistent ChromaDB client.
+- Disables anonymized telemetry.
+- Gets or creates the configured collection.
+- Provides a reset function to rebuild the collection.
+
+5) Recommender Service (src/recommender.py)
+- BookRecommender is the main service.
+- Thread-safe lazy initialization with a lock.
+- Builds deterministic IDs based on isbn13, handling duplicates.
+- Rebuilds the index if the collection count mismatches dataset size.
+- Encodes books in batches for efficient indexing.
+- Converts distances to scores (bounded relevance score).
+- Exposes:
+  - initialize(force_reindex=False)
+  - recommend_books(query, n_results)
+
+6) UI and App Entry (app.py)
+- Defines the Streamlit UI layout and styling.
+- Provides a hero section, search input, and results grid.
+- Uses safe HTML escaping to render data.
+- Adds loading, empty, and error states.
+- Shows categories and relevance score on each result card.
+- Initializes the recommender at startup.
+
+Functional Flow (Step-by-Step)
+
+Startup Flow
+1. Application starts by running `streamlit run app.py`.
+2. Logging is configured (src/logging_utils.py).
+3. recommender_service.initialize() is called.
+4. load_books() loads and preprocesses the CSV dataset.
+5. load_embedding_model() loads the SentenceTransformer.
+6. get_collection() opens the ChromaDB collection.
+7. The collection count is compared to dataset row count.
+8. If count mismatches or force_reindex is true:
+   - The collection is reset.
+   - Books are embedded in batches.
+   - Embeddings and metadata are added to Chroma.
+9. The app UI is built and the server starts.
+
+Query Flow
+1. User types a query and clicks Search (or presses Enter).
+2. UI shows a loading state.
+3. recommender_service.recommend_books() runs:
+   - Validates the query.
+   - Clamps result count to available records and config bounds.
+   - Embeds the query.
+   - Runs Chroma similarity search.
+   - Converts distances to relevance scores.
+   - Returns Recommendation objects.
+4. UI renders result cards with title, author, categories, score, and description.
+5. Status message updates to success or error.
+
+Error Handling
+- Missing dataset file raises FileNotFoundError at load time.
+- Missing columns raises ValueError with a clear message.
+- Empty query returns a user-facing input error.
+- Unexpected failures are logged and reported in the UI.
+
+Unique and Notable Aspects
+- Semantic retrieval: uses embeddings to match meaning, not keywords.
+- Persistent vector store: avoids re-embedding on every run.
+- Deterministic IDs: stable for repeated indexing.
+- Environment validation: fails fast on invalid configuration.
+- UI-focused design: polished layout with responsive cards and safe HTML rendering.
+- Modular architecture: separate files for config, data, embeddings, vector store, service, UI.
+
+Packaging
+- Project uses pyproject.toml for build metadata.
+
+Functions and Key Behaviors
+- Settings.__post_init__(): validates configuration.
+- load_books(): loads and normalizes the dataset.
+- load_embedding_model(): loads the embedding model with caching.
+- get_collection(): returns a persistent Chroma collection.
+- reset_collection(): deletes and recreates the collection.
+- BookRecommender.initialize(): builds the index if needed.
+- BookRecommender.recommend_books(): runs semantic search and returns results.
+- main(): constructs the Streamlit UI.
+
+Operational Notes
+- First run may download the embedding model from Hugging Face.
+- If vector_db/chroma_db is persisted, restarts are faster.
+- BATCH_SIZE controls memory usage and speed for indexing.
+- TOP_K_MAX sets the upper bound for UI result count.
+- Python 3.11-3.12 is recommended for best dependency compatibility on Windows.
+
+How Everything Works Together
+- Config defines all runtime parameters and validates them.
+- Data loader turns the CSV into a clean, structured DataFrame.
+- Embedding model creates dense vectors for both book texts and queries.
+- ChromaDB stores embeddings and metadata for similarity search.
+- Recommender orchestrates indexing and querying in a thread-safe way.
+- Streamlit UI collects user input and renders the recommendations.
+

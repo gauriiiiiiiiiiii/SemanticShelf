@@ -6,10 +6,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def _get_bool(name: str, default: str) -> bool:
-    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
-
-
 def _get_int(name: str, default: str) -> int:
     value = os.getenv(name, default).strip()
     try:
@@ -29,11 +25,6 @@ class Settings:
     default_results: int = _get_int("DEFAULT_RESULTS", "5")
     top_k_max: int = _get_int("TOP_K_MAX", "10")
 
-    app_host: str = os.getenv("APP_HOST", "127.0.0.1")
-    app_port: int = _get_int("APP_PORT", "7860")
-    app_share: bool = _get_bool("APP_SHARE", "false")
-    app_debug: bool = _get_bool("APP_DEBUG", "false")
-
     def __post_init__(self) -> None:
         if self.batch_size <= 0:
             raise ValueError("BATCH_SIZE must be > 0")
@@ -43,8 +34,6 @@ class Settings:
             raise ValueError("TOP_K_MAX must be > 0")
         if self.default_results > self.top_k_max:
             raise ValueError("DEFAULT_RESULTS must be <= TOP_K_MAX")
-        if not (1 <= self.app_port <= 65535):
-            raise ValueError("APP_PORT must be between 1 and 65535")
         if not self.collection_name.strip():
             raise ValueError("CHROMA_COLLECTION must not be empty")
         if not self.embedding_model_name.strip():

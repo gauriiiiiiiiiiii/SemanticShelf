@@ -1,7 +1,7 @@
 import html
 import logging
 
-import gradio as gr
+import streamlit as st
 
 from src.config import SETTINGS
 from src.logging_utils import configure_logging
@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 CSS = """
+<style>
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
 
 :root {
@@ -26,17 +27,13 @@ CSS = """
   --shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
 }
 
-* { box-sizing: border-box; }
-
-html, body, .gradio-container {
+html, body, .stApp {
   min-height: 100vh;
   margin: 0;
   font-family: 'Manrope', sans-serif;
   background: radial-gradient(circle at top, #ffffff 0%, #f6f8ff 32%, #eef3fb 68%, #e6edf8 100%);
   color: var(--text);
 }
-
-.gradio-container { padding: 0 !important; }
 
 #app-shell {
   min-height: 100vh;
@@ -75,31 +72,6 @@ html, body, .gradio-container {
   max-width: 720px;
   display: grid;
   gap: 16px;
-}
-
-.search-row {
-  display: grid;
-  grid-template-columns: 1fr 160px;
-  gap: 12px;
-  align-items: center;
-}
-
-.search-row .gr-button {
-  height: 48px;
-  font-weight: 600;
-}
-
-.search-row .gr-text-input textarea,
-.search-row .gr-text-input input {
-  min-height: 48px;
-  font-size: 1rem;
-}
-
-.search-meta {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  align-items: center;
 }
 
 .status {
@@ -146,6 +118,22 @@ html, body, .gradio-container {
   font-size: 0.92rem;
 }
 
+.result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.result-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .result-description {
   color: #23324d;
   font-size: 0.93rem;
@@ -162,24 +150,11 @@ html, body, .gradio-container {
   text-align: center;
 }
 
-.spinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid var(--accent-soft);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 @media (max-width: 720px) {
   #app-shell { padding: 28px 16px 36px; }
   .hero { padding: 36px 18px 30px; }
-  .search-row { grid-template-columns: 1fr; }
 }
+</style>
 """
 
 
@@ -225,10 +200,14 @@ def _render_results(query: str, top_k: int) -> tuple[str, str]:
     for item in recommendations:
         description = html.escape(_truncate_text(item.description or ""))
         authors = html.escape(item.authors or "Unknown author")
+        categories = html.escape(item.categories or "Uncategorized")
+        score = f"{item.score:.3f}"
         cards.append(
             "<article class='result-card'>"
             f"<h3 class='result-title'>{html.escape(item.title)}</h3>"
             f"<div class='result-author'>{authors}</div>"
+            f"<div class='result-meta'><span>{categories}</span>"
+            f"<span class='result-badge'>Score {score}</span></div>"
             f"<div class='result-description'>{description}</div>"
             "</article>"
         )
@@ -239,79 +218,89 @@ def _render_results(query: str, top_k: int) -> tuple[str, str]:
     )
 
 
-def build_app() -> gr.Blocks:
-    with gr.Blocks(css=CSS, title="SemanticShelf • AI Book Recommender", fill_height=True) as demo:
-        with gr.Column(elem_id="app-shell"):
-            gr.HTML(
-                """
-                <section class='hero'>
-                  <h1>SemanticShelf</h1>
-                  <p>AI Semantic Book Recommendation Engine</p>
-                </section>
-                """
+@st.cache_resource(show_spinner=False)
+def _ensure_initialized() -> None:
+    recommender_service.initialize()
+
+
+def _empty_results() -> str:
+    return (
+        "<div class='results-panel'><div class='empty-state'>"
+        "Enter a topic to see recommendations.</div></div>"
+    )
+
+
+def main() -> None:
+    st.set_page_config(
+        page_title="SemanticShelf • AI Book Recommender",
+        page_icon="📚",
+        layout="wide",
+    )
+    st.markdown(CSS, unsafe_allow_html=True)
+
+    if "query" not in st.session_state:
+        st.session_state.query = ""
+    if "top_k" not in st.session_state:
+        st.session_state.top_k = SETTINGS.default_results
+    if "results_html" not in st.session_state:
+        st.session_state.results_html = _empty_results()
+    if "status_html" not in st.session_state:
+        st.session_state.status_html = "<div class='status'>Ready when you are.</div>"
+
+    with st.spinner("Initializing recommender..."):
+        _ensure_initialized()
+
+    with st.container():
+        st.markdown(
+            """
+            <div id='app-shell'>
+              <section class='hero'>
+                <h1>SemanticShelf</h1>
+                <p>AI Semantic Book Recommendation Engine</p>
+              </section>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with st.container():
+        st.markdown("<div class='search-wrap'>", unsafe_allow_html=True)
+        with st.form("search_form"):
+            query = st.text_input(
+                "Search books",
+                value=st.session_state.query,
+                placeholder="Search books by topic, theme, genre, or idea...",
+                label_visibility="collapsed",
             )
-
-            with gr.Column(elem_classes=["search-wrap"]):
-                with gr.Row(elem_classes=["search-row"]):
-                    query = gr.Textbox(
-                        show_label=False,
-                        placeholder="Search books by topic, theme, genre, or idea...",
-                        lines=1,
-                    )
-                    search_btn = gr.Button("Search", variant="primary")
-                with gr.Row(elem_classes=["search-meta"]):
-                    top_k = gr.Slider(
-                        minimum=1,
-                        maximum=SETTINGS.top_k_max,
-                        value=SETTINGS.default_results,
-                        step=1,
-                        label="Result count",
-                    )
-                    clear_btn = gr.Button("Clear", variant="secondary")
-                status = gr.HTML("<div class='status'>Ready when you are.</div>")
-
-            results = gr.HTML(
-                "<div class='results-panel'><div class='empty-state'>"
-                "Enter a topic to see recommendations.</div></div>"
+            top_k = st.slider(
+                "Result count",
+                min_value=1,
+                max_value=SETTINGS.top_k_max,
+                value=st.session_state.top_k,
+                step=1,
             )
+            submitted = st.form_submit_button("Search")
+        clear_clicked = st.button("Clear")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-            search_btn.click(
-                lambda: (
-                    "<div class='results-panel'><div class='loading-state'>"
-                    "<div class='spinner'></div><div>Searching the shelves...</div>"
-                    "</div></div>",
-                    "<div class='status loading'>Searching...</div>",
-                ),
-                inputs=None,
-                outputs=[results, status],
-                queue=False,
-            )
+    if clear_clicked:
+        st.session_state.query = ""
+        st.session_state.top_k = SETTINGS.default_results
+        st.session_state.results_html = _empty_results()
+        st.session_state.status_html = "<div class='status'>Cleared.</div>"
+        st.rerun()
 
-            search_btn.click(fn=_render_results, inputs=[query, top_k], outputs=[results, status], queue=True, show_progress=True)
-            query.submit(fn=_render_results, inputs=[query, top_k], outputs=[results, status], queue=True, show_progress=True)
+    if submitted:
+        st.session_state.query = query
+        st.session_state.top_k = top_k
+        with st.spinner("Searching the shelves..."):
+            results_html, status_html = _render_results(query, top_k)
+        st.session_state.results_html = results_html
+        st.session_state.status_html = status_html
 
-            clear_btn.click(
-                fn=lambda: (
-                    "",
-                    SETTINGS.default_results,
-                    "<div class='results-panel'><div class='empty-state'>"
-                    "Enter a topic to see recommendations.</div></div>",
-                    "<div class='status'>Cleared.</div>",
-                ),
-                outputs=[query, top_k, results, status],
-                queue=False,
-            )
-
-    return demo
+    st.markdown(st.session_state.status_html, unsafe_allow_html=True)
+    st.markdown(st.session_state.results_html, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
-    logger.info("Initializing recommender service...")
-    recommender_service.initialize()
-    app = build_app()
-    app.launch(
-        server_name=SETTINGS.app_host,
-        server_port=SETTINGS.app_port,
-        share=SETTINGS.app_share,
-        debug=SETTINGS.app_debug,
-    )
+    main()
