@@ -1,6 +1,5 @@
 SemanticShelf 
 
-Overview
 SemanticShelf is a semantic book recommendation application. It takes a natural-language query (topic, theme, genre, idea) and returns a ranked list of books whose descriptions and metadata are semantically similar to the query. The system uses sentence-level embeddings, stores them in a local persistent vector database, and serves a web UI with Streamlit.
 
 Key Goals
@@ -57,6 +56,26 @@ Dataset Details (data/books.csv)
   - A combined text field is built as:
     title + authors + categories + description
   - Rows with empty title are removed.
+
+Dataset Size and Statistics
+- Total rows: 6810
+- Unique authors: 3781
+- Unique categories: 568
+- Average description length (chars): 396.31
+- Median description length (chars): 239
+- Missingness rate per key column (percent after cleaning):
+  - title: 0.00
+  - authors: 1.06
+  - categories: 1.45
+  - description: 3.85
+  - isbn13: 0.00
+  - subtitle: 65.04
+
+How to compute these stats
+- Total rows: count rows after preprocessing.
+- Unique authors/categories: count distinct values (after cleaning).
+- Description length: compute length of description field.
+- Missingness: percentage of empty strings per column after fill.
 
 Libraries and Dependencies
 - streamlit
@@ -201,4 +220,65 @@ How Everything Works Together
 - ChromaDB stores embeddings and metadata for similarity search.
 - Recommender orchestrates indexing and querying in a thread-safe way.
 - Streamlit UI collects user input and renders the recommendations.
+
+
+Interview-Focused Summary
+
+Problem Statement
+SemanticShelf enables meaning-based book discovery. It maps a natural-language query and book metadata into the same embedding space, then retrieves the closest matches. This solves the mismatch between user intent and keyword search by capturing semantics and paraphrases.
+
+Dataset and Stats
+See "Dataset Details" and "Dataset Size and Statistics" above for schema, cleaning rules, and computed counts.
+
+Data Preparation and Feature Construction
+The data loader validates required columns, fills missing values with empty strings, trims whitespace, and creates a combined text feature using title, authors, categories, and description. Rows without a title are dropped to avoid empty embeddings.
+
+Model and Retrieval Strategy
+The system uses a sentence-transformers model to create dense embeddings. These vectors are stored in a persistent ChromaDB collection. Query vectors are compared against stored vectors to produce a ranked list.
+
+Indexing and Query Flow
+- Indexing: load CSV, build combined text, embed in batches, store embeddings + metadata in ChromaDB.
+- Query: embed the input text, run vector similarity search, convert distance to a bounded score, return metadata.
+
+Evaluation Metrics and Results
+Metrics for retrieval are Precision@k, Recall@k, MRR, and NDCG. This build does not include labeled relevance data, so numeric results are not reported. When labels are available, measure ranking metrics plus latency, index build time, and index size.
+
+UI Outputs and User Choices
+The Streamlit interface provides a query input, a result count slider, a Search button, and a Clear button. Output includes a status message and a results grid. Each card shows title, authors, categories, score, and a truncated description. Empty input, errors, or no matches display clear UI states.
+
+Tech Stack and Rationale
+- Python for the overall pipeline and UI.
+- Pandas for CSV ingestion and cleaning.
+- Sentence-Transformers for semantic embeddings.
+- ChromaDB for persistent, fast similarity search.
+- Streamlit for a fast, production-ready demo UI.
+- python-dotenv for environment-driven configuration.
+
+Key Functions and Their Purpose
+- Settings.__post_init__() validates configuration boundaries.
+- load_books() enforces schema and builds the combined text feature.
+- load_embedding_model() caches the embedding model for reuse.
+- get_collection() and reset_collection() manage the persistent vector store.
+- BookRecommender.initialize() builds or reuses the index safely.
+- BookRecommender.recommend_books() executes query embedding and retrieval.
+
+Performance and Cost Considerations
+Batch size controls memory usage. The persistent vector store reduces cold-start cost. The chosen embedding model balances accuracy and latency for local deployments.
+
+Deployment Notes
+The app runs with Streamlit. It can be wrapped with FastAPI for API access if required. Dependencies and runtime are pinned for reproducibility.
+
+Challenges and Mitigations
+Missing columns and empty text are handled with validation and cleaning. Duplicate identifiers are deduplicated with deterministic suffixes. Cold start is mitigated by persistent storage and model caching.
+
+Future Improvements
+Add labeled evaluation, hybrid retrieval (BM25 + embeddings), cross-encoder reranking, personalization signals, and incremental indexing.
+
+Glossary
+- Embedding: vector representation of text meaning.
+- Vector database: storage and search layer for embeddings.
+- Cosine similarity: vector similarity measure.
+- Top-k: number of returned results.
+- MRR, NDCG: ranking quality metrics.
+
 
